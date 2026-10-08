@@ -1,0 +1,1303 @@
+--!nonstrict
+--[[
+	============================================================
+	 KhianCombined  —  single-file build
+	 Brand : khian   |   Logo : KhxXn
+	------------------------------------------------------------
+	 A self-contained LocalScript that bundles:
+
+	   * KhianUI      — window / tab / toggle / slider / dropdown /
+	                    button / toast UI library
+	   * KhianExtras  — TweenHelper (UI + model animation) and
+	                    IdleIndicator (local idle-time tracking)
+	   * a demo that wires the two together
+
+	 Drop this ONE file into StarterPlayer > StarterPlayerScripts as a
+	 LocalScript. No other scripts are required.
+
+	 Press RightShift to toggle the window.
+
+	 Intended for LEGITIMATE game development on your own experiences.
+	============================================================
+]]
+
+-- ============================================================
+--  SECTION 1 — KhianUI (inlined module)
+-- ============================================================
+local KhianUI = (function()
+--[[
+	============================================================
+	 KhianUI  —  a modern, dependency-free Roblox UI library
+	 Brand : khian
+	 Logo  : KhxXn
+	------------------------------------------------------------
+	 Build clean windows, tabs, toggles, sliders, dropdowns,
+	 buttons, labels and toast notifications in a few lines.
+
+	 Quick start:
+	   local KhianUI = require(path.to.KhianUI)
+	   local ui  = KhianUI.new({ Title = "khian", Logo = "KhxXn" })
+	   local tab = ui:Tab("Home")
+	   tab:Toggle("Some Feature", false, function(state) end)
+	   ui:Notify("khian", "Loaded successfully!")
+
+	 This library is intended for LEGITIMATE game development.
+	============================================================
+]]
+
+local TweenService      = game:GetService("TweenService")
+local UserInputService  = game:GetService("UserInputService")
+local Players           = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+
+local KhianUI = {}
+KhianUI.__index = KhianUI
+KhianUI.Version = "1.0.0"
+
+-- ============================================================
+--  THEME
+-- ============================================================
+KhianUI.Theme = {
+	Accent     = Color3.fromRGB(124, 92, 255),
+	Accent2    = Color3.fromRGB(0, 214, 178),
+	Background = Color3.fromRGB(16, 16, 22),
+	Surface    = Color3.fromRGB(26, 26, 36),
+	Surface2   = Color3.fromRGB(36, 36, 50),
+	Text       = Color3.fromRGB(238, 238, 248),
+	SubText    = Color3.fromRGB(150, 150, 172),
+	Stroke     = Color3.fromRGB(52, 52, 72),
+	Good       = Color3.fromRGB(64, 220, 132),
+	Bad        = Color3.fromRGB(240, 92, 92),
+	Font       = Enum.Font.GothamMedium,
+	FontBold   = Enum.Font.GothamBold,
+}
+
+-- ============================================================
+--  INTERNAL HELPERS
+-- ============================================================
+local function create(class, props)
+	local inst = Instance.new(class)
+	local parent
+	for k, v in pairs(props or {}) do
+		if k == "Parent" then
+			parent = v
+		else
+			inst[k] = v
+		end
+	end
+	if parent then
+		inst.Parent = parent
+	end
+	return inst
+end
+
+local function corner(parent, r)
+	return create("UICorner", { CornerRadius = UDim.new(0, r or 8), Parent = parent })
+end
+
+local function stroke(parent, color, thickness, transparency)
+	return create("UIStroke", {
+		Color = color or KhianUI.Theme.Stroke,
+		Thickness = thickness or 1,
+		Transparency = transparency or 0,
+		Parent = parent,
+	})
+end
+
+local function pad(parent, px)
+	return create("UIPadding", {
+		PaddingTop = UDim.new(0, px), PaddingBottom = UDim.new(0, px),
+		PaddingLeft = UDim.new(0, px), PaddingRight = UDim.new(0, px),
+		Parent = parent,
+	})
+end
+
+local function list(parent, padding, dir)
+	return create("UIListLayout", {
+		Padding = UDim.new(0, padding or 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		FillDirection = dir or Enum.FillDirection.Vertical,
+		Parent = parent,
+	})
+end
+
+local function tween(inst, props, time)
+	local t = TweenService:Create(inst, TweenInfo.new(time or 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)
+	t:Play()
+	return t
+end
+
+local function gradient(inst, c1, c2)
+	return create("UIGradient", {
+		Color = ColorSequence.new(c1 or KhianUI.Theme.Accent, c2 or KhianUI.Theme.Accent2),
+		Parent = inst,
+	})
+end
+
+-- ============================================================
+--  PAGE (a single tab's content)
+-- ============================================================
+local Page = {}
+Page.__index = Page
+
+function Page:Section(title)
+	local theme = KhianUI.Theme
+	local holder = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 30),
+		BackgroundTransparency = 1,
+		LayoutOrder = self._order, Parent = self.Frame,
+	})
+	self._order = self._order + 1
+	create("Frame", {
+		Size = UDim2.fromOffset(4, 16), Position = UDim2.fromOffset(0, 7),
+		BackgroundColor3 = theme.Accent, BorderSizePixel = 0, Parent = holder,
+	})
+	local accent = holder:FindFirstChildWhichIsA("Frame")
+	corner(accent, 2)
+	create("TextLabel", {
+		Size = UDim2.new(1, -14, 1, 0), Position = UDim2.fromOffset(14, 0),
+		BackgroundTransparency = 1, Font = theme.FontBold, Text = title,
+		TextColor3 = theme.Text, TextSize = 15,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = holder,
+	})
+	return holder
+end
+
+function Page:Label(text)
+	local theme = KhianUI.Theme
+	local lbl = create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 22), BackgroundTransparency = 1,
+		Font = theme.Font, Text = text, TextColor3 = theme.SubText,
+		TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
+		LayoutOrder = self._order, Parent = self.Frame,
+	})
+	self._order = self._order + 1
+	return lbl
+end
+
+function Page:Button(text, callback)
+	local theme = KhianUI.Theme
+	local btn = create("TextButton", {
+		Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = theme.Surface2,
+		Text = "", AutoButtonColor = false, LayoutOrder = self._order, Parent = self.Frame,
+	})
+	self._order = self._order + 1
+	corner(btn, 9)
+	stroke(btn, theme.Stroke, 1, 0.3)
+	local lbl = create("TextLabel", {
+		Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
+		Font = theme.FontBold, Text = text, TextColor3 = theme.Text,
+		TextSize = 14, Parent = btn,
+	})
+	btn.MouseEnter:Connect(function() tween(btn, { BackgroundColor3 = theme.Accent }, 0.15) end)
+	btn.MouseLeave:Connect(function() tween(btn, { BackgroundColor3 = theme.Surface2 }, 0.15) end)
+	btn.MouseButton1Click:Connect(function()
+		if callback then callback() end
+	end)
+	return btn
+end
+
+function Page:Toggle(text, default, callback)
+	local theme = KhianUI.Theme
+	local state = default == true
+	local row = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = theme.Surface,
+		LayoutOrder = self._order, Parent = self.Frame,
+	})
+	self._order = self._order + 1
+	corner(row, 9)
+	stroke(row, theme.Stroke, 1, 0.5)
+	create("TextLabel", {
+		Size = UDim2.new(1, -70, 1, 0), Position = UDim2.fromOffset(12, 0),
+		BackgroundTransparency = 1, Font = theme.Font, Text = text,
+		TextColor3 = theme.Text, TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+	})
+	local switch = create("TextButton", {
+		Size = UDim2.fromOffset(44, 22), Position = UDim2.new(1, -56, 0.5, -11),
+		BackgroundColor3 = state and theme.Good or theme.Surface2,
+		Text = "", AutoButtonColor = false, Parent = row,
+	})
+	corner(switch, 11)
+	local knob = create("Frame", {
+		Size = UDim2.fromOffset(16, 16),
+		Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.fromOffset(3, 3),
+		BackgroundColor3 = theme.Text, BorderSizePixel = 0, Parent = switch,
+	})
+	corner(knob, 8)
+	switch.MouseButton1Click:Connect(function()
+		state = not state
+		tween(switch, { BackgroundColor3 = state and theme.Good or theme.Surface2 }, 0.18)
+		tween(knob, { Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.fromOffset(3, 3) }, 0.18)
+		if callback then callback(state) end
+	end)
+	return { Set = function(v)
+		state = v == true
+		switch.BackgroundColor3 = state and theme.Good or theme.Surface2
+		knob.Position = state and UDim2.new(1, -19, 0.5, -8) or UDim2.fromOffset(3, 3)
+	end }
+end
+
+function Page:Slider(text, min, max, default, callback)
+	local theme = KhianUI.Theme
+	min, max = min or 0, max or 100
+	local value = default or min
+	local row = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 52), BackgroundColor3 = theme.Surface,
+		LayoutOrder = self._order, Parent = self.Frame,
+	})
+	self._order = self._order + 1
+	corner(row, 9)
+	stroke(row, theme.Stroke, 1, 0.5)
+	create("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 20), Position = UDim2.fromOffset(12, 6),
+		BackgroundTransparency = 1, Font = theme.Font, Text = text,
+		TextColor3 = theme.Text, TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+	})
+	local valueLbl = create("TextLabel", {
+		Size = UDim2.new(0, 60, 0, 20), Position = UDim2.new(1, -72, 0, 6),
+		BackgroundTransparency = 1, Font = theme.FontBold, Text = tostring(value),
+		TextColor3 = theme.Accent2, TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Right, Parent = row,
+	})
+	local track = create("Frame", {
+		Size = UDim2.new(1, -24, 0, 6), Position = UDim2.new(0, 12, 1, -16),
+		BackgroundColor3 = theme.Surface2, BorderSizePixel = 0, Parent = row,
+	})
+	corner(track, 3)
+	local fill = create("Frame", {
+		Size = UDim2.fromScale((value - min) / math.max(1, (max - min)), 1),
+		BackgroundColor3 = theme.Accent, BorderSizePixel = 0, Parent = track,
+	})
+	corner(fill, 3)
+	gradient(fill)
+	local sliding = false
+
+	local function apply(v, fire)
+		v = math.clamp(math.floor(v + 0.5), min, max)
+		value = v
+		local alpha = (v - min) / math.max(1, (max - min))
+		fill.Size = UDim2.fromScale(alpha, 1)
+		valueLbl.Text = tostring(v)
+		if fire and callback then callback(v) end
+	end
+
+	local function fromInput(input)
+		local rel = (input.Position.X - track.AbsolutePosition.X) / math.max(1, track.AbsoluteSize.X)
+		apply(min + (max - min) * math.clamp(rel, 0, 1), true)
+	end
+
+	track.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			sliding = true
+			fromInput(input)
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			fromInput(input)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			sliding = false
+		end
+	end)
+
+	return { Set = function(v) apply(v, true) end, Get = function() return value end }
+end
+
+function Page:Dropdown(text, options, default, callback)
+	local theme = KhianUI.Theme
+	options = options or {}
+	local current = default or options[1]
+	local row = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 62), BackgroundColor3 = theme.Surface,
+		LayoutOrder = self._order, Parent = self.Frame,
+	})
+	self._order = self._order + 1
+	corner(row, 9)
+	stroke(row, theme.Stroke, 1, 0.5)
+	create("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 20), Position = UDim2.fromOffset(12, 6),
+		BackgroundTransparency = 1, Font = theme.Font, Text = text,
+		TextColor3 = theme.Text, TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+	})
+	local button = create("TextButton", {
+		Size = UDim2.new(1, -24, 0, 26), Position = UDim2.new(0, 12, 1, -32),
+		BackgroundColor3 = theme.Surface2, Text = "", AutoButtonColor = false, Parent = row,
+	})
+	corner(button, 7)
+	local buttonLbl = create("TextLabel", {
+		Size = UDim2.new(1, -24, 1, 0), Position = UDim2.fromOffset(10, 0),
+		BackgroundTransparency = 1, Font = theme.Font, Text = tostring(current),
+		TextColor3 = theme.Text, TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = button,
+	})
+	create("TextLabel", {
+		Size = UDim2.fromOffset(20, 20), Position = UDim2.new(1, -24, 0.5, -10),
+		BackgroundTransparency = 1, Font = theme.FontBold, Text = "v",
+		TextColor3 = theme.SubText, TextSize = 12, Parent = button,
+	})
+
+	local open = false
+	local panel = create("Frame", {
+		Size = UDim2.new(1, -24, 0, #options * 26),
+		Position = UDim2.new(0, 12, 1, -32 + 28),
+		BackgroundColor3 = theme.Surface2, Visible = false, ZIndex = 5, Parent = row,
+	})
+	corner(panel, 7)
+	stroke(panel, theme.Stroke, 1, 0.2)
+	list(panel, 0)
+
+	for _, opt in ipairs(options) do
+		local optBtn = create("TextButton", {
+			Size = UDim2.new(1, 0, 0, 26), BackgroundColor3 = theme.Surface2,
+			Text = "", AutoButtonColor = false, ZIndex = 6, Parent = panel,
+		})
+		create("TextLabel", {
+			Size = UDim2.new(1, -16, 1, 0), Position = UDim2.fromOffset(10, 0),
+			BackgroundTransparency = 1, Font = theme.Font, Text = tostring(opt),
+			TextColor3 = theme.Text, TextSize = 13,
+			TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 7, Parent = optBtn,
+		})
+		optBtn.MouseEnter:Connect(function() optBtn.BackgroundColor3 = theme.Accent end)
+		optBtn.MouseLeave:Connect(function() optBtn.BackgroundColor3 = theme.Surface2 end)
+		optBtn.MouseButton1Click:Connect(function()
+			current = opt
+			buttonLbl.Text = tostring(opt)
+			open = false
+			panel.Visible = false
+			if callback then callback(opt) end
+		end)
+	end
+
+	button.MouseButton1Click:Connect(function()
+		open = not open
+		panel.Visible = open
+	end)
+
+	return { Get = function() return current end }
+end
+
+function Page:Textbox(text, default, callback)
+	local theme = KhianUI.Theme
+	local row = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 62), BackgroundColor3 = theme.Surface,
+		LayoutOrder = self._order, Parent = self.Frame,
+	})
+	self._order = self._order + 1
+	corner(row, 9)
+	stroke(row, theme.Stroke, 1, 0.5)
+	create("TextLabel", {
+		Size = UDim2.new(1, -24, 0, 20), Position = UDim2.fromOffset(12, 6),
+		BackgroundTransparency = 1, Font = theme.Font, Text = text,
+		TextColor3 = theme.Text, TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+	})
+	local box = create("TextBox", {
+		Size = UDim2.new(1, -24, 0, 26), Position = UDim2.new(0, 12, 1, -32),
+		BackgroundColor3 = theme.Surface2, Font = theme.Font, Text = default or "",
+		PlaceholderText = "...", TextColor3 = theme.Text, PlaceholderColor3 = theme.SubText,
+		TextSize = 13, ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left, Parent = row,
+	})
+	corner(box, 7)
+	pad(box, 8)
+	box.FocusLost:Connect(function()
+		if callback then callback(box.Text) end
+	end)
+	return box
+end
+
+-- ============================================================
+--  WINDOW
+-- ============================================================
+function KhianUI.new(config)
+	config = config or {}
+	local self = setmetatable({}, KhianUI)
+	self.Config = {
+		Title    = config.Title or "khian",
+		Logo     = config.Logo or "KhxXn",
+		Subtitle = config.Subtitle or "UI Library",
+		Size     = config.Size or UDim2.fromOffset(560, 400),
+		ToggleKey = config.ToggleKey or Enum.KeyCode.RightShift,
+	}
+	self.Tabs = {}
+	self._order = 0
+	self:Build()
+	return self
+end
+
+function KhianUI:Build()
+	local theme = KhianUI.Theme
+	local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+	local screen = create("ScreenGui", {
+		Name = "KhianUI", ResetOnSpawn = false,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling, IgnoreGuiInset = true,
+		Parent = playerGui,
+	})
+	self.ScreenGui = screen
+
+	local main = create("Frame", {
+		Name = "Main", Size = self.Config.Size,
+		Position = UDim2.fromScale(0.5, 0.5), AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = theme.Background, BorderSizePixel = 0, Parent = screen,
+	})
+	corner(main, 14)
+	stroke(main, theme.Stroke, 1, 0.2)
+	self.Main = main
+
+	-- Title bar
+	local titleBar = create("Frame", {
+		Name = "TitleBar", Size = UDim2.new(1, 0, 0, 48),
+		BackgroundColor3 = theme.Surface, BorderSizePixel = 0, Parent = main,
+	})
+	corner(titleBar, 14)
+	create("Frame", {
+		Size = UDim2.new(1, 0, 0, 14), Position = UDim2.new(0, 0, 1, -14),
+		BackgroundColor3 = theme.Surface, BorderSizePixel = 0, Parent = titleBar,
+	})
+	local accent = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 2), Position = UDim2.new(0, 0, 1, -2),
+		BackgroundColor3 = theme.Accent, BorderSizePixel = 0, Parent = titleBar,
+	})
+	gradient(accent)
+
+	local logo = create("TextLabel", {
+		Name = "Logo", Size = UDim2.fromOffset(96, 48), Position = UDim2.fromOffset(14, 0),
+		BackgroundTransparency = 1, Font = theme.FontBold, Text = self.Config.Logo,
+		TextColor3 = theme.Text, TextSize = 20,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = titleBar,
+	})
+	gradient(logo)
+
+	create("TextLabel", {
+		Size = UDim2.new(0, 220, 1, 0), Position = UDim2.fromOffset(112, 0),
+		BackgroundTransparency = 1, Font = theme.Font, Text = self.Config.Subtitle,
+		TextColor3 = theme.SubText, TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = titleBar,
+	})
+
+	local close = create("TextButton", {
+		Size = UDim2.fromOffset(26, 26), Position = UDim2.new(1, -36, 0.5, -13),
+		BackgroundColor3 = theme.Surface2, Text = "", AutoButtonColor = false, Parent = titleBar,
+	})
+	corner(close, 7)
+	create("TextLabel", {
+		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Font = theme.FontBold,
+		Text = "x", TextColor3 = theme.Text, TextSize = 14, Parent = close,
+	})
+	close.MouseEnter:Connect(function() close.BackgroundColor3 = theme.Bad end)
+	close.MouseLeave:Connect(function() close.BackgroundColor3 = theme.Surface2 end)
+	close.MouseButton1Click:Connect(function() screen.Enabled = false end)
+
+	-- Dragging
+	local dragging, dragStart, startPos
+	local function update(input)
+		local delta = input.Position - dragStart
+		main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+	titleBar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = main.Position
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			update(input)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+
+	-- Sidebar + content
+	local sidebar = create("Frame", {
+		Name = "Sidebar", Size = UDim2.new(0, 150, 1, -76),
+		Position = UDim2.fromOffset(14, 62), BackgroundTransparency = 1, Parent = main,
+	})
+	list(sidebar, 6)
+	self.Sidebar = sidebar
+
+	local content = create("Frame", {
+		Name = "Content", Size = UDim2.new(1, -192, 1, -76),
+		Position = UDim2.fromOffset(178, 62), BackgroundTransparency = 1, Parent = main,
+	})
+	self.Content = content
+
+	-- Toggle key
+	UserInputService.InputBegan:Connect(function(input, gpe)
+		if gpe then return end
+		if input.KeyCode == self.Config.ToggleKey then
+			screen.Enabled = not screen.Enabled
+		end
+	end)
+
+	-- Notification layer
+	self.NotifyLayer = create("Frame", {
+		Name = "Notifications", Size = UDim2.new(0, 300, 1, -40),
+		Position = UDim2.new(1, -320, 0, 20), BackgroundTransparency = 1,
+		Parent = screen,
+	})
+	list(self.NotifyLayer, 8)
+	create("UIListLayout", {
+		Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder,
+		VerticalAlignment = Enum.VerticalAlignment.Top, Parent = self.NotifyLayer,
+	})
+end
+
+function KhianUI:Tab(name)
+	local theme = KhianUI.Theme
+	local button = create("TextButton", {
+		Name = name, Size = UDim2.new(1, 0, 0, 36),
+		BackgroundColor3 = theme.Accent, BackgroundTransparency = 1,
+		Text = "", AutoButtonColor = false, Parent = self.Sidebar,
+	})
+	corner(button, 8)
+	local bar = create("Frame", {
+		Size = UDim2.fromOffset(3, 0), Position = UDim2.fromOffset(0, 0),
+		BackgroundColor3 = theme.Accent, BorderSizePixel = 0, Parent = button,
+	})
+	corner(bar, 2)
+	local label = create("TextLabel", {
+		Size = UDim2.new(1, -20, 1, 0), Position = UDim2.fromOffset(14, 0),
+		BackgroundTransparency = 1, Font = theme.Font, Text = name,
+		TextColor3 = theme.SubText, TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = button,
+	})
+
+	local pageFrame = create("ScrollingFrame", {
+		Name = name .. "Page", Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1, BorderSizePixel = 0, Visible = false,
+		ScrollBarThickness = 3, CanvasSize = UDim2.new(0, 0, 0, 0),
+		ScrollBarImageColor3 = theme.Stroke, Parent = self.Content,
+	})
+	list(pageFrame, 8)
+	pad(pageFrame, 2)
+
+	local page = setmetatable({ Frame = pageFrame, _order = 0 }, Page)
+
+	local tab = { Button = button, Page = page, Frame = pageFrame }
+	for _, fn in ipairs({ "Section", "Label", "Button", "Toggle", "Slider", "Dropdown", "Textbox" }) do
+		tab[fn] = function(_, ...) return page[fn](page, ...) end
+	end
+
+	local function select()
+		for _, other in ipairs(self.Tabs) do
+			other.Frame.Visible = false
+			other.Button.BackgroundTransparency = 1
+			other.Bar.Size = UDim2.fromOffset(3, 0)
+			other.Label.TextColor3 = theme.SubText
+		end
+		pageFrame.Visible = true
+		button.BackgroundTransparency = 0.85
+		bar.Size = UDim2.fromOffset(3, 18)
+		label.TextColor3 = theme.Text
+	end
+
+	button.MouseButton1Click:Connect(select)
+	button.MouseEnter:Connect(function()
+		if not pageFrame.Visible then label.TextColor3 = theme.Text end
+	end)
+	button.MouseLeave:Connect(function()
+		if not pageFrame.Visible then label.TextColor3 = theme.SubText end
+	end)
+
+	tab.Bar = bar
+	tab.Label = label
+	tab.Select = select
+	table.insert(self.Tabs, tab)
+
+	if #self.Tabs == 1 then
+		select()
+	end
+	return tab
+end
+
+function KhianUI:Notify(title, text, duration)
+	local theme = KhianUI.Theme
+	duration = duration or 4
+	local toast = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 60), BackgroundColor3 = theme.Surface,
+		BackgroundTransparency = 1, BorderSizePixel = 0, Parent = self.NotifyLayer,
+	})
+	corner(toast, 10)
+	stroke(toast, theme.Stroke, 1, 0.2)
+	local accent = create("Frame", {
+		Size = UDim2.fromOffset(4, 40), Position = UDim2.fromOffset(10, 10),
+		BackgroundColor3 = theme.Accent, BorderSizePixel = 0, Parent = toast,
+	})
+	corner(accent, 2)
+	gradient(accent)
+	local titleLbl = create("TextLabel", {
+		Size = UDim2.new(1, -30, 0, 18), Position = UDim2.fromOffset(22, 10),
+		BackgroundTransparency = 1, Font = theme.FontBold, Text = title,
+		TextColor3 = theme.Text, TextSize = 14,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = toast,
+	})
+	local textLbl = create("TextLabel", {
+		Size = UDim2.new(1, -30, 0, 22), Position = UDim2.fromOffset(22, 28),
+		BackgroundTransparency = 1, Font = theme.Font, Text = text,
+		TextColor3 = theme.SubText, TextSize = 12, TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left, Parent = toast,
+	})
+	toast.Position = UDim2.new(1, 40, 0, 0)
+	tween(toast, { Position = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 0 }, 0.25)
+	tween(titleLbl, { TextTransparency = 0 }, 0.25)
+	tween(textLbl, { TextTransparency = 0 }, 0.25)
+
+	task.delay(duration, function()
+		tween(toast, { Position = UDim2.new(1, 40, 0, 0), BackgroundTransparency = 1 }, 0.25)
+		tween(titleLbl, { TextTransparency = 1 }, 0.25)
+		tween(textLbl, { TextTransparency = 1 }, 0.25)
+		task.wait(0.3)
+		toast:Destroy()
+	end)
+	return toast
+end
+
+function KhianUI:Destroy()
+	if self.ScreenGui then
+		self.ScreenGui:Destroy()
+	end
+end
+
+return KhianUI
+
+end)()
+
+-- ============================================================
+--  SECTION 2 — KhianExtras (inlined module)
+-- ============================================================
+local KhianExtras = (function()
+--[[
+	============================================================
+	 KhianExtras  —  companion utilities for KhianUI
+	 Brand : khian
+	 Logo  : KhxXn
+	------------------------------------------------------------
+	 Two dependency-free helpers you can drop next to KhianUI:
+
+	   1. TweenHelper
+	      Smooth, reusable animation utilities for UI elements,
+	      parts and models. Presets for fade / slide / pulse plus
+	      a generic tween wrapper and model CFrame tweening.
+
+	   2. IdleIndicator
+	      Measures how long the LOCAL player has been idle and
+	      raises events when they go idle or come back. It only
+	      OBSERVES input — it never fakes or replays input, so it
+	      respects whatever idle/AFK systems your game already has.
+	      Use it to drive a HUD badge, pause music, dim the screen,
+	      show "Away" status, etc.
+
+	 Quick start:
+	   local KhianExtras = require(path.to.KhianExtras)
+
+	   KhianExtras.TweenHelper.FadeIn(myFrame, 0.4)
+	   KhianExtras.TweenHelper.Pulse(myButton, 1.06)
+
+	   local idle = KhianExtras.IdleIndicator.new({
+	       IdleThreshold = 60,
+	       OnIdle   = function(t) print("idle for", t) end,
+	       OnActive = function()  print("back!") end,
+	   })
+	   idle:Start()
+
+	 Intended for LEGITIMATE game development on your own
+	 experiences (menus, cutscenes, NPC/prop animation, HUDs).
+	============================================================
+]]
+
+local TweenService     = game:GetService("TweenService")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Players          = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+
+local KhianExtras = {}
+KhianExtras.Version = "1.0.0"
+
+-- ============================================================
+--  TWEEN HELPER
+-- ============================================================
+local TweenHelper = {}
+KhianExtras.TweenHelper = TweenHelper
+
+-- Friendly aliases so callers don't have to memorise the enums.
+TweenHelper.Easing = {
+	Linear  = Enum.EasingStyle.Linear,
+	Sine    = Enum.EasingStyle.Sine,
+	Quad    = Enum.EasingStyle.Quad,
+	Cubic   = Enum.EasingStyle.Cubic,
+	Quart   = Enum.EasingStyle.Quart,
+	Quint   = Enum.EasingStyle.Quint,
+	Bounce  = Enum.EasingStyle.Bounce,
+	Elastic = Enum.EasingStyle.Elastic,
+	Back    = Enum.EasingStyle.Back,
+}
+
+TweenHelper.Direction = {
+	In    = Enum.EasingDirection.In,
+	Out   = Enum.EasingDirection.Out,
+	InOut = Enum.EasingDirection.InOut,
+}
+
+--[[
+	TweenHelper.Tween(instance, properties, duration, style, direction)
+	Generic wrapper around TweenService:Create. Returns the Tween.
+]]
+function TweenHelper.Tween(instance, properties, duration, style, direction)
+	local info = TweenInfo.new(
+		duration or 0.25,
+		style or Enum.EasingStyle.Quad,
+		direction or Enum.EasingDirection.Out
+	)
+	local tween = TweenService:Create(instance, info, properties)
+	tween:Play()
+	return tween
+end
+
+--[[
+	TweenHelper.TweenAsync(...)
+	Same as Tween, but yields until the tween finishes.
+]]
+function TweenHelper.TweenAsync(instance, properties, duration, style, direction)
+	local tween = TweenHelper.Tween(instance, properties, duration, style, direction)
+	tween.Completed:Wait()
+	return tween
+end
+
+-- Collect every transparency-bearing property on an instance so a fade
+-- can cover frames, text, images and UIStrokes in one pass.
+local function transparencyProps(inst)
+	local props = {}
+	if inst:IsA("GuiObject") then
+		props.BackgroundTransparency = true
+	end
+	if inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox") then
+		props.TextTransparency = true
+		props.TextStrokeTransparency = true
+	end
+	if inst:IsA("ImageLabel") or inst:IsA("ImageButton") then
+		props.ImageTransparency = true
+	end
+	if inst:IsA("UIStroke") then
+		props.Transparency = true
+	end
+	return props
+end
+
+local function collectFadeTargets(root, includeDescendants)
+	local targets = {}
+	local function add(inst)
+		local props = transparencyProps(inst)
+		if next(props) then
+			targets[#targets + 1] = { inst = inst, props = props }
+		end
+	end
+	add(root)
+	if includeDescendants ~= false then
+		for _, d in ipairs(root:GetDescendants()) do
+			add(d)
+		end
+	end
+	return targets
+end
+
+-- Remember each element's natural ("visible") transparency the first
+-- time it is faded, so a fade-in restores the ORIGINAL look instead of
+-- forcing everything opaque. Weak keys let destroyed instances be GC'd.
+local fadeBaselines = setmetatable({}, { __mode = "k" })
+
+local function baselineFor(entry)
+	local base = fadeBaselines[entry.inst]
+	if not base then
+		base = {}
+		for prop in pairs(entry.props) do
+			base[prop] = entry.inst[prop]
+		end
+		fadeBaselines[entry.inst] = base
+	end
+	return base
+end
+
+--[[
+	TweenHelper.FadeIn(gui, duration, includeDescendants)
+	Fades a GuiObject (and, by default, its descendants) in from fully
+	transparent to their natural, visible transparency.
+]]
+function TweenHelper.FadeIn(gui, duration, includeDescendants)
+	duration = duration or 0.35
+	local targets = collectFadeTargets(gui, includeDescendants)
+	local info = TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local last
+	for _, entry in ipairs(targets) do
+		local base = baselineFor(entry)
+		local to = {}
+		for prop in pairs(entry.props) do
+			pcall(function() entry.inst[prop] = 1 end)
+			to[prop] = base[prop] or 0
+		end
+		local tween = TweenService:Create(entry.inst, info, to)
+		tween:Play()
+		last = tween
+	end
+	return last
+end
+
+--[[
+	TweenHelper.FadeOut(gui, duration, includeDescendants)
+	Fades a GuiObject (and descendants) out to fully transparent. The
+	natural transparency is remembered so FadeIn can restore it later.
+]]
+function TweenHelper.FadeOut(gui, duration, includeDescendants)
+	duration = duration or 0.35
+	local targets = collectFadeTargets(gui, includeDescendants)
+	local info = TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local last
+	for _, entry in ipairs(targets) do
+		baselineFor(entry) -- capture before hiding
+		local to = {}
+		for prop in pairs(entry.props) do
+			to[prop] = 1
+		end
+		local tween = TweenService:Create(entry.inst, info, to)
+		tween:Play()
+		last = tween
+	end
+	return last
+end
+
+--[[
+	TweenHelper.ClearFadeBaseline(gui, includeDescendants)
+	Forgets stored baselines so the next fade re-captures the current
+	look (useful if you restyled the UI at runtime).
+]]
+function TweenHelper.ClearFadeBaseline(gui, includeDescendants)
+	local targets = collectFadeTargets(gui, includeDescendants)
+	for _, entry in ipairs(targets) do
+		fadeBaselines[entry.inst] = nil
+	end
+end
+
+--[[
+	TweenHelper.SlideIn(gui, offset, duration, style)
+	Slides a GuiObject into place from an offset (default: 40px from
+	the right). Remembers the element's current position as the target.
+]]
+function TweenHelper.SlideIn(gui, offset, duration, style)
+	offset = offset or UDim2.fromOffset(40, 0)
+	local final = gui.Position
+	gui.Position = final + offset
+	return TweenHelper.Tween(
+		gui,
+		{ Position = final },
+		duration or 0.3,
+		style or Enum.EasingStyle.Back,
+		Enum.EasingDirection.Out
+	)
+end
+
+--[[
+	TweenHelper.Pulse(gui, scale, duration)
+	Quickly scales a GuiObject up then back — nice for button feedback.
+]]
+function TweenHelper.Pulse(gui, scale, duration)
+	scale = scale or 1.06
+	duration = duration or 0.12
+	local final = gui.Size
+	local up = UDim2.new(
+		final.X.Scale * scale, final.X.Offset,
+		final.Y.Scale * scale, final.Y.Offset
+	)
+	local t1 = TweenHelper.Tween(gui, { Size = up }, duration)
+	t1.Completed:Wait()
+	return TweenHelper.Tween(gui, { Size = final }, duration)
+end
+
+--[[
+	TweenHelper.Shake(gui, magnitude, duration)
+	Jitters a GuiObject left/right a few times, then restores it.
+]]
+function TweenHelper.Shake(gui, magnitude, duration)
+	magnitude = magnitude or 6
+	duration = duration or 0.3
+	local final = gui.Position
+	local steps = 6
+	local info = TweenInfo.new(duration / steps, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+	return task.spawn(function()
+		for i = 1, steps do
+			local dir = (i % 2 == 0) and 1 or -1
+			local t = TweenService:Create(gui, info, { Position = final + UDim2.fromOffset(magnitude * dir, 0) })
+			t:Play()
+			t.Completed:Wait()
+		end
+		TweenHelper.Tween(gui, { Position = final }, duration / steps)
+	end)
+end
+
+--[[
+	TweenHelper.TweenCFrame(part, targetCFrame, duration, style, direction)
+	Tweens a single BasePart's CFrame. Great for moving props,
+	platforms or camera rigs.
+]]
+function TweenHelper.TweenCFrame(part, targetCFrame, duration, style, direction)
+	return TweenHelper.Tween(
+		part,
+		{ CFrame = targetCFrame },
+		duration or 1,
+		style or Enum.EasingStyle.Quad,
+		direction or Enum.EasingDirection.Out
+	)
+end
+
+--[[
+	TweenHelper.TweenModel(model, targetCFrame, duration, style, direction)
+	Tweens an entire Model (or single BasePart) to a target CFrame by
+	animating a proxy CFrameValue and re-pivoting every step. Works for
+	props, NPCs, cutscene rigs, and your own character in places you own.
+]]
+function TweenHelper.TweenModel(model, targetCFrame, duration, style, direction)
+	local proxy = Instance.new("CFrameValue")
+	proxy.Value = model:GetPivot()
+
+	local connection = proxy:GetPropertyChangedSignal("Value"):Connect(function()
+		model:PivotTo(proxy.Value)
+	end)
+
+	local info = TweenInfo.new(
+		duration or 1,
+		style or Enum.EasingStyle.Quad,
+		direction or Enum.EasingDirection.Out
+	)
+	local tween = TweenService:Create(proxy, info, { Value = targetCFrame })
+	tween:Play()
+
+	tween.Completed:Connect(function()
+		connection:Disconnect()
+		proxy:Destroy()
+	end)
+
+	return tween
+end
+
+--[[
+	TweenHelper.SpinModel(model, degrees, duration, style, direction)
+	Rotates a model around its own vertical (Y) axis. Defaults to one
+	full 360° turn.
+]]
+function TweenHelper.SpinModel(model, degrees, duration, style, direction)
+	local pivot = model:GetPivot()
+	local target = pivot * CFrame.Angles(0, math.rad(degrees or 360), 0)
+	return TweenHelper.TweenModel(model, target, duration or 1, style, direction)
+end
+
+--[[
+	TweenHelper.MoveModelBy(model, offset, duration, style, direction)
+	Moves a model by a relative Vector3 offset.
+]]
+function TweenHelper.MoveModelBy(model, offset, duration, style, direction)
+	local target = model:GetPivot() + offset
+	return TweenHelper.TweenModel(model, target, duration, style, direction)
+end
+
+--[[
+	TweenHelper.TweenCharacter(targetCFrame, duration, style, direction)
+	Convenience wrapper that tweens the LOCAL player's character. Best
+	used in your own experience (spawn animations, cutscenes). While a
+	Humanoid is actively simulating, physics may fight the tween — anchor
+	the humanoid or use it for cosmetic spins/hops.
+]]
+function TweenHelper.TweenCharacter(targetCFrame, duration, style, direction)
+	local character = LocalPlayer.Character
+	if not character then
+		return nil
+	end
+	return TweenHelper.TweenModel(character, targetCFrame, duration, style, direction)
+end
+
+-- ============================================================
+--  IDLE INDICATOR
+-- ============================================================
+--[[
+	Measures local inactivity. It listens to real input events and
+	never synthesises input, so it cannot be used to defeat a game's
+	anti-idle logic — it simply reports the player's idle time.
+]]
+local IdleIndicator = {}
+IdleIndicator.__index = IdleIndicator
+KhianExtras.IdleIndicator = IdleIndicator
+
+--[[
+	IdleIndicator.new(config)
+	  config.IdleThreshold  (number, seconds before considered idle; default 60)
+	  config.UpdateInterval (number, seconds between Tick callbacks; default 1)
+	  config.OnIdle(idleTime)         fired once when the player becomes idle
+	  config.OnActive()               fired once when the player returns
+	  config.OnTick(idleTime, isIdle) fired every UpdateInterval
+]]
+function IdleIndicator.new(config)
+	config = config or {}
+	local self = setmetatable({}, IdleIndicator)
+	self.IdleThreshold  = config.IdleThreshold or 60
+	self.UpdateInterval = config.UpdateInterval or 1
+	self.OnIdle   = config.OnIdle
+	self.OnActive = config.OnActive
+	self.OnTick   = config.OnTick
+
+	self._lastActive = os.clock()
+	self._idle = false
+	self._running = false
+	self._accum = 0
+	self._connections = {}
+	return self
+end
+
+-- Seconds since the last observed input.
+function IdleIndicator:GetIdleTime()
+	return os.clock() - self._lastActive
+end
+
+function IdleIndicator:IsIdle()
+	return self:GetIdleTime() >= self.IdleThreshold
+end
+
+-- Call manually to reset the timer (e.g. after a scripted action).
+function IdleIndicator:MarkActive()
+	self._lastActive = os.clock()
+	if self._idle then
+		self._idle = false
+		if self.OnActive then
+			self.OnActive()
+		end
+	end
+end
+
+function IdleIndicator:Start()
+	if self._running then
+		return self
+	end
+	self._running = true
+	self._lastActive = os.clock()
+
+	local function bump()
+		self:MarkActive()
+	end
+
+	table.insert(self._connections, UserInputService.InputBegan:Connect(bump))
+	table.insert(self._connections, UserInputService.InputChanged:Connect(bump))
+	table.insert(self._connections, UserInputService.InputEnded:Connect(bump))
+
+	table.insert(self._connections, RunService.Heartbeat:Connect(function(dt)
+		self._accum = self._accum + dt
+		if self._accum < self.UpdateInterval then
+			return
+		end
+		self._accum = 0
+
+		local idleTime = self:GetIdleTime()
+		if not self._idle and idleTime >= self.IdleThreshold then
+			self._idle = true
+			if self.OnIdle then
+				self.OnIdle(idleTime)
+			end
+		end
+		if self.OnTick then
+			self.OnTick(idleTime, self._idle)
+		end
+	end))
+
+	return self
+end
+
+function IdleIndicator:Stop()
+	for _, connection in ipairs(self._connections) do
+		connection:Disconnect()
+	end
+	self._connections = {}
+	self._running = false
+	return self
+end
+
+function IdleIndicator:IsRunning()
+	return self._running
+end
+
+return KhianExtras
+
+end)()
+
+-- ============================================================
+--  SECTION 3 — Demo / usage
+-- ============================================================
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local TweenHelper   = KhianExtras.TweenHelper
+local IdleIndicator = KhianExtras.IdleIndicator
+
+-- 1. Create the window -----------------------------------------
+local ui = KhianUI.new({
+	Title    = "khian",
+	Logo     = "KhxXn",
+	Subtitle = "Developer Panel",
+	Size     = UDim2.fromOffset(580, 440),
+})
+
+-- 2. Home tab --------------------------------------------------
+local home = ui:Tab("Home")
+home:Section("Welcome")
+home:Label("A legitimate UI library + helpers for your own Roblox experience.")
+
+home:Button("Say Hello", function()
+	ui:Notify("khian", "Hello from KhxXn!", 3)
+end)
+
+home:Toggle("Enable Music", false, function(state)
+	print("Music:", state)
+end)
+
+home:Slider("Music Volume", 0, 100, 50, function(value)
+	print("Volume:", value)
+end)
+
+-- 3. Player tab (IdleIndicator) --------------------------------
+local player = ui:Tab("Player")
+player:Section("Idle / AFK Indicator")
+player:Label("Reports how long you have been idle. It never fakes input, so it respects the game's own idle systems.")
+
+local statusLabel = player:Label("Status: Active  |  Idle for 0s")
+
+local idle = IdleIndicator.new({
+	IdleThreshold  = 60,
+	UpdateInterval = 1,
+	OnIdle = function(idleTime)
+		ui:Notify("khian", "You have been idle for " .. math.floor(idleTime) .. "s.", 4)
+	end,
+	OnActive = function()
+		ui:Notify("khian", "Welcome back!", 3)
+	end,
+	OnTick = function(idleTime, isIdle)
+		statusLabel.Text = string.format(
+			"Status: %s  |  Idle for %ds",
+			isIdle and "IDLE" or "Active",
+			math.floor(idleTime)
+		)
+	end,
+})
+idle:Start()
+
+player:Slider("Idle Threshold (seconds)", 15, 300, 60, function(value)
+	idle.IdleThreshold = value
+end)
+
+player:Toggle("Track Idle", true, function(state)
+	if state then
+		idle:Start()
+	else
+		idle:Stop()
+	end
+end)
+
+player:Button("Reset Idle Timer", function()
+	idle:MarkActive()
+	ui:Notify("khian", "Idle timer reset.", 2)
+end)
+
+-- 4. Tween tab (TweenHelper) -----------------------------------
+local tweenTab = ui:Tab("Tween")
+tweenTab:Section("UI Tween Presets")
+
+tweenTab:Button("Fade Window In", function()
+	TweenHelper.FadeIn(ui.Main, 0.4)
+end)
+
+tweenTab:Button("Pulse Window", function()
+	TweenHelper.Pulse(ui.Main, 1.04, 0.12)
+end)
+
+tweenTab:Button("Shake Window", function()
+	TweenHelper.Shake(ui.Main, 8, 0.3)
+end)
+
+tweenTab:Button("Slide Notification", function()
+	ui:Notify("khian", "Notifications animate with the tween helper.", 3)
+end)
+
+tweenTab:Section("Model / Part Tween")
+
+tweenTab:Button("Spawn & Tween Demo Part", function()
+	local part = Instance.new("Part")
+	part.Size = Vector3.new(2, 2, 2)
+	part.Anchored = true
+	part.CanCollide = false
+	part.Color = Color3.fromRGB(124, 92, 255)
+	part.Material = Enum.Material.Neon
+	part.Name = "KhianDemoPart"
+
+	local character = LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local base = root and (root.CFrame * CFrame.new(0, 3, -6)) or CFrame.new(0, 10, 0)
+	part.CFrame = base
+	part.Parent = workspace
+
+	TweenHelper.MoveModelBy(part, Vector3.new(0, 4, 0), 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+	task.delay(1.4, function()
+		if part.Parent then
+			TweenHelper.MoveModelBy(part, Vector3.new(0, -4, 0), 1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+		end
+	end)
+	task.delay(3, function()
+		part:Destroy()
+	end)
+
+	ui:Notify("khian", "Demo part spawned (client-only).", 3)
+end)
+
+tweenTab:Button("Spin My Character", function()
+	local character = LocalPlayer.Character
+	if character then
+		TweenHelper.SpinModel(character, 360, 1)
+		ui:Notify("khian", "Spinning your character.", 2)
+	else
+		ui:Notify("khian", "No character to spin.", 2)
+	end
+end)
+
+local settings = ui:Tab("Settings")
+settings:Section("Preferences")
+
+settings:Dropdown("Graphics Quality", { "Low", "Medium", "High", "Ultra" }, "High", function(choice)
+	print("Quality:", choice)
+end)
+
+settings:Textbox("Display Name", "Player", function(text)
+	print("Name:", text)
+end)
+
+settings:Toggle("Fullscreen", true, function(state)
+	print("Fullscreen:", state)
+end)
+
+-- 6. About tab -------------------------------------------------
+local about = ui:Tab("About")
+about:Section("khian")
+about:Label("KhianUI v" .. KhianUI.Version)
+about:Label("KhianExtras v" .. KhianExtras.Version)
+about:Label("Brand: khian")
+about:Label("Logo: KhxXn")
+about:Button("Show Notification", function()
+	ui:Notify("khian", "Thanks for using KhianUI!", 4)
+end)
+
+-- 7. Startup notification --------------------------------------
+ui:Notify("khian", "UI loaded successfully. Press RightShift to toggle.", 5)
